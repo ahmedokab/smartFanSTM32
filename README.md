@@ -2,7 +2,7 @@
 A Smart Fan with a Telemetry system programmed in C using an STM32
 Project by Ahmed Okab
 
-## 🔌 Circuit Diagrama
+## 🔌 Circuit Diagram!
 <p align="center">
   <img src="https://github.com/user-attachments/assets/5a2f8220-a0d4-435c-8e2c-9c0904757b90" width="500" />
 </p>
