@@ -50,6 +50,7 @@ Results over PuTTY when in NTC mode:
 
 
 <img width="285" height="318" alt="image" src="https://github.com/user-attachments/assets/44117303-2aca-4638-9802-3a1fd89f0079" />
+
 Used 84Mhz frequency, period = 1000. So when the duty is stated to be 500, it means a 50% duty cycle as consistent with my STM32 IDE setup.
 
 
