@@ -3,8 +3,9 @@ A Smart Fan with a Telemetry system programmed in C using an STM32
 Project by Ahmed Okab
 
 ## 🔌 Circuit Diagrama
-<img width="285" height="318" alt="image" src="https://github.com/user-attachments/assets/5a2f8220-a0d4-435c-8e2c-9c0904757b90" />
-
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/5a2f8220-a0d4-435c-8e2c-9c0904757b90" width="500" />
+</p>
 
 ##  Overview
 This project implements a **closed-loop smart fan system** using an STM32 microcontroller.  
