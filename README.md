@@ -1,9 +1,8 @@
 # smartFanSTM32
 A Smart Fan with a Telemetry system programmed in C using an STM32
 
-## 🔌 Circuit Diagram
-[IMG_1931](https://github.com/user-attachments/assets/5a2f8220-a0d4-435c-8e2c-9c0904757b90)
-
+## 🔌 Circuit Diagrama
+<img width="285" height="318" alt="image" src="https://github.com/user-attachments/assets/5a2f8220-a0d4-435c-8e2c-9c0904757b90" />
 
 # 🌬️ Smart Fan with Telemetry (STM32)
 
@@ -47,6 +46,8 @@ The project demonstrates integration of multiple STM32 peripherals:
 - **UART Terminal**: PuTTY / Arduino Serial Monitor (115200 baud, 8N1)
 
 Results over PuTTY when in NTC mode: 
+
+
 <img width="285" height="318" alt="image" src="https://github.com/user-attachments/assets/44117303-2aca-4638-9802-3a1fd89f0079" />
 
 
