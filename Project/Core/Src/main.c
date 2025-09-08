@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <math.h>
 
 /* USER CODE END Includes */
 
@@ -32,6 +33,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define BETA 3435.0      // typical value from Vishay NTC datasheet (B25/85)
+#define T0   298.15      // 25 °C in Kelvin
+#define R0   10000.0     // 10kΩ at 25°C
+#define R_FIXED 10000.0  // the fixed series resistor in your divider
 
 /* USER CODE END PD */
 
@@ -53,6 +58,24 @@ int _write(int file, char *ptr, int len) {
     return len;
 }
 
+float read_temperature(void) {
+    // Start ADC
+    HAL_ADC_Start(&hadc1);
+    HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+    uint32_t adc_val = HAL_ADC_GetValue(&hadc1);
+
+    // Converting ADC to voltage
+    float v_out = (adc_val / 4095.0) * 3.3;
+
+    // Calculate NTC resistance
+    float r_ntc = (R_FIXED * v_out) / (3.3 - v_out);
+
+    // Steinhart equation (Beta form)
+    float tempK = 1.0 / ((1.0/T0) + (1.0/BETA) * log(r_ntc / R0));
+    float tempC = tempK - 273.15;
+
+    return tempC;
+}
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -87,6 +110,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  int NTCMode = 1;
 
   /* USER CODE END Init */
 
@@ -104,6 +128,8 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -111,11 +137,37 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	    printf("Hello from STM32!\r\n");
-	    HAL_Delay(1000);
-
 
     /* USER CODE BEGIN 3 */
+
+	  // code utilizing NTC Thermistor
+
+
+	  if(NTCMode){
+      float temp = read_temperature();
+
+      // Map temperature to fan duty
+      uint32_t duty = 0;
+      if (temp < 20) duty = 0;          // Fan OFF
+      else if (temp < 30) duty = 500;   // 50% duty cycle
+      else if (temp < 35) duty = 700;   // 70% duty cycle
+      else duty = 1000;                 // 100%
+
+      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
+
+      printf("Temp = %.2f °C, Fan Duty = %lu\r\n", temp, duty);
+
+      HAL_Delay(1000); // 1 sec update
+
+  	  }
+	  else{
+		  // bme280 temp sensor mode utilizing I2C
+
+
+	  }
+
+
+	 // display on LED either way
   }
   /* USER CODE END 3 */
 }
@@ -233,9 +285,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 84;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 255;
+  htim1.Init.Period = 1000;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;

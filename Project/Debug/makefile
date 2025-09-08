@@ -61,7 +61,7 @@ main-build: smartFanSTM32Project.elf secondary-outputs
 
 # Tool invocations
 smartFanSTM32Project.elf smartFanSTM32Project.map: $(OBJS) $(USER_OBJS) C:\Users\Ahmed\OneDrive\Documents\GitHub\smartFanSTM32\Project\STM32F411RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "smartFanSTM32Project.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\Ahmed\OneDrive\Documents\GitHub\smartFanSTM32\Project\STM32F411RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="smartFanSTM32Project.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "smartFanSTM32Project.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\Ahmed\OneDrive\Documents\GitHub\smartFanSTM32\Project\STM32F411RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="smartFanSTM32Project.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
