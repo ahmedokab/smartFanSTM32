@@ -1,12 +1,12 @@
 # smartFanSTM32
 A Smart Fan with a Telemetry system programmed in C using an STM32
+Project by Ahmed Okab
 
 ## 🔌 Circuit Diagrama
 <img width="285" height="318" alt="image" src="https://github.com/user-attachments/assets/5a2f8220-a0d4-435c-8e2c-9c0904757b90" />
 
-# 🌬️ Smart Fan with Telemetry (STM32)
 
-## 📖 Overview
+##  Overview
 This project implements a **closed-loop smart fan system** using an STM32 microcontroller.  
 The fan’s speed is automatically adjusted based on temperature readings, with live telemetry sent to a PC terminal ( I used PuTTY personally ).
 
@@ -19,7 +19,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 
 ---
 
-## ⚡ Features
+##  Features
 - Reads temperature in real time using an **NTC thermistor** voltage divider  
 - Uses a **feedback loop** to adjust fan PWM duty cycle according to temperature  
 - Streams temperature and fan speed data to **PuTTY / Arduino Serial Monitor** at 115200 baud  
@@ -29,7 +29,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 
 ---
 
-## 🔧 Hardware Used
+##  Hardware Used
 - STM32 Nucleo F411RE
 - NTC Thermistor (10kΩ, Vishay NTCLE100E3) + 10kΩ resistor voltage divider  
 - MOSFET (FQP30N06L) for fan driver (logic-level N-channel)  
@@ -39,7 +39,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 - Breadboard + jumper wires + a bunch of resistors
 - USB cable for STM32 programming and UART telemetry  
 
-## 💻 Software
+## Software
 - **IDE**: STM32CubeIDE  
 - **Drivers**: STM32 HAL (generated via CubeMX)  
 - **Language**: C  
@@ -49,5 +49,7 @@ Results over PuTTY when in NTC mode:
 
 
 <img width="285" height="318" alt="image" src="https://github.com/user-attachments/assets/44117303-2aca-4638-9802-3a1fd89f0079" />
+Used 84Mhz frequency, period = 1000. So when the duty is stated to be 500, it means a 50% duty cycle as consistent with my STM32 IDE setup.
+
 
 
