@@ -23,7 +23,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 ##  Features
 - Reads temperature in real time using an **NTC thermistor** voltage divider  
 - Uses a **feedback loop** to adjust fan PWM duty cycle according to temperature  
-- Streams temperature and fan speed data to **PuTTY / Arduino Serial Monitor** at 115200 baud  
+- Streams temperature and fan speed data to **PuTTY ** at 115200 baud  
 - Tested with **9V motor + N-MOSFET driver circuit** sf
 - Modular design allows swapping the thermistor for a **BME280 digital sensor** over I²C
   
