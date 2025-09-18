@@ -23,8 +23,8 @@ The project demonstrates integration of multiple STM32 peripherals:
 ##  Features
 - Reads temperature in real time using an **NTC thermistor** voltage divider  
 - Uses a **feedback loop** to adjust fan PWM duty cycle according to temperature  
-- Streams temperature and fan speed data to **PuTTY / Arduino Serial Monitor** at 115200 baud  
-- Tested with **9V motor + N-MOSFET driver circuit** sf
+- Streams temperature and fan speed data to **PuTTY** at 115200 baud  
+- Tested with **9V motor + N-MOSFET driver circuit** 
 - Modular design allows swapping the thermistor for a **BME280 digital sensor** over I²C
   
 
@@ -44,7 +44,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 - **IDE**: STM32CubeIDE  
 - **Drivers**: STM32 HAL (generated via CubeMX)  
 - **Language**: C  
-- **UART Terminal**: PuTTY / Arduino Serial Monitor (115200 baud, 8N1)
+- **UART Terminal**: PuTTY (115200 baud)
 
 Results over PuTTY when in NTC mode: 
 
