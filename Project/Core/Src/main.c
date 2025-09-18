@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <math.h>
 
+
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,6 +39,7 @@
 #define T0   298.15      // 25 °C in Kelvin
 #define R0   10000.0     // 10kΩ at 25°C
 #define R_FIXED 10000.0  // the fixed series resistor in your divider
+#define BME280_ADDR  (0x76 << 1)
 
 /* USER CODE END PD */
 
@@ -48,11 +51,21 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim1;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+typedef struct {
+    uint16_t dig_T1;
+    int16_t  dig_T2;
+    int16_t  dig_T3;
+} BME280_CalibData;
+
+BME280_CalibData calib;
 int _write(int file, char *ptr, int len) {
     HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
     return len;
@@ -76,6 +89,57 @@ float read_temperature(void) {
 
     return tempC;
 }
+void BME280_Init(void)
+{
+    uint8_t ctrl_meas = 0x27;  // temp oversampling x1, press x1, normal mode
+    uint8_t ctrl_hum  = 0x01;  // humidity oversampling x1
+
+    // humidity oversampling must be written first
+    HAL_I2C_Mem_Write(&hi2c1, BME280_ADDR, 0xF2, 1, &ctrl_hum, 1, HAL_MAX_DELAY);
+    HAL_I2C_Mem_Write(&hi2c1, BME280_ADDR, 0xF4, 1, &ctrl_meas, 1, HAL_MAX_DELAY);
+}
+
+int32_t t_fine;
+
+
+static float BME280_CompensateTemp(int32_t adc_T)
+{
+    int32_t var1, var2, T;
+    var1 = ((((adc_T >> 3) - ((int32_t)calib.dig_T1 << 1))) *
+            ((int32_t)calib.dig_T2)) >> 11;
+
+    var2 = (((((adc_T >> 4) - ((int32_t)calib.dig_T1)) *
+              ((adc_T >> 4) - ((int32_t)calib.dig_T1))) >> 12) *
+            ((int32_t)calib.dig_T3)) >> 14;
+
+    t_fine = var1 + var2;
+    T = (t_fine * 5 + 128) >> 8;  // 0.01 °C
+
+    return T / 100.0f;
+}
+
+
+void BME280_ReadCalibration(void)
+{
+    uint8_t data[6];
+    HAL_I2C_Mem_Read(&hi2c1, BME280_ADDR, 0x88, 1, data, 6, HAL_MAX_DELAY);
+
+    calib.dig_T1 = (uint16_t)(data[1] << 8 | data[0]);
+    calib.dig_T2 = (int16_t)(data[3] << 8 | data[2]);
+    calib.dig_T3 = (int16_t)(data[5] << 8 | data[4]);
+
+}
+
+
+float BME280_ReadTemperature(void)
+{
+    uint8_t data[3];
+    HAL_I2C_Mem_Read(&hi2c1, BME280_ADDR, 0xFA, 1, data, 3, HAL_MAX_DELAY);
+
+    int32_t raw = ((int32_t)data[0] << 12) | ((int32_t)data[1] << 4) | (data[2] >> 4);
+    return BME280_CompensateTemp(raw);
+}
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,6 +148,7 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -110,7 +175,12 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  int NTCMode = 1;
+  int NTCMode = 0;
+
+  BME280_ReadCalibration();
+  BME280_Init();
+
+
 
   /* USER CODE END Init */
 
@@ -126,6 +196,7 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM1_Init();
   MX_USART2_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -149,8 +220,8 @@ int main(void)
       // Map temperature to fan duty
       uint32_t duty = 0;
       if (temp < 20) duty = 0;          // Fan OFF
-      else if (temp < 30) duty = 500;   // 50% duty cycle
-      else if (temp < 35) duty = 700;   // 70% duty cycle
+      else if (temp < 24) duty = 500;   // 50% duty cycle
+      else if (temp < 35) duty = 800;   // 70% duty cycle
       else duty = 1000;                 // 100%
 
       __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
@@ -160,12 +231,22 @@ int main(void)
       HAL_Delay(1000); // 1 sec update
 
   	  }
-	  else{
-		  // bme280 temp sensor mode utilizing I2C
+	  else {
+	      float temp = BME280_ReadTemperature();  // °C
+	      uint32_t duty = 0;
 
+	      // Same fan control logic
+	      if (temp < 20) duty = 0;
+	      else if (temp < 24) duty = 500;
+	      else if (temp < 35) duty = 800;
+	      else duty = 1000;
 
+	      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
+
+	      printf("BME280 Temp = %.2f °C, Fan Duty = %lu\r\n", temp, duty);
+
+	      HAL_Delay(1000); // 1 sec update
 	  }
-
 
 	 // display on LED either way
   }
@@ -262,6 +343,40 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
+
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -376,6 +491,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
