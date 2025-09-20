@@ -39,7 +39,6 @@
 #define T0   298.15      // 25 °C in Kelvin
 #define R0   10000.0     // 10kΩ at 25°C
 #define R_FIXED 10000.0  // the fixed series resistor in your divider
-#define BME280_ADDR  (0x76 << 1)
 
 /* USER CODE END PD */
 
@@ -59,85 +58,23 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
-typedef struct {
-    uint16_t dig_T1;
-    int16_t  dig_T2;
-    int16_t  dig_T3;
-} BME280_CalibData;
-
-BME280_CalibData calib;
-int _write(int file, char *ptr, int len) {
-    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-    return len;
-}
-
 float read_temperature(void) {
     // Start ADC
     HAL_ADC_Start(&hadc1);
     HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
     uint32_t adc_val = HAL_ADC_GetValue(&hadc1);
 
-    // Converting ADC to voltage
+    // Converting ADC value recorded to voltage using formula
     float v_out = (adc_val / 4095.0) * 3.3;
 
-    // Calculate NTC resistance
+    // Calculate NTC resistance, using resistance formula
     float r_ntc = (R_FIXED * v_out) / (3.3 - v_out);
 
-    // Steinhart equation (Beta form)
+    // using the beta steinhart eq
     float tempK = 1.0 / ((1.0/T0) + (1.0/BETA) * log(r_ntc / R0));
     float tempC = tempK - 273.15;
 
-    return tempC;
-}
-void BME280_Init(void)
-{
-    uint8_t ctrl_meas = 0x27;  // temp oversampling x1, press x1, normal mode
-    uint8_t ctrl_hum  = 0x01;  // humidity oversampling x1
-
-    // humidity oversampling must be written first
-    HAL_I2C_Mem_Write(&hi2c1, BME280_ADDR, 0xF2, 1, &ctrl_hum, 1, HAL_MAX_DELAY);
-    HAL_I2C_Mem_Write(&hi2c1, BME280_ADDR, 0xF4, 1, &ctrl_meas, 1, HAL_MAX_DELAY);
-}
-
-int32_t t_fine;
-
-
-static float BME280_CompensateTemp(int32_t adc_T)
-{
-    int32_t var1, var2, T;
-    var1 = ((((adc_T >> 3) - ((int32_t)calib.dig_T1 << 1))) *
-            ((int32_t)calib.dig_T2)) >> 11;
-
-    var2 = (((((adc_T >> 4) - ((int32_t)calib.dig_T1)) *
-              ((adc_T >> 4) - ((int32_t)calib.dig_T1))) >> 12) *
-            ((int32_t)calib.dig_T3)) >> 14;
-
-    t_fine = var1 + var2;
-    T = (t_fine * 5 + 128) >> 8;  // 0.01 °C
-
-    return T / 100.0f;
-}
-
-
-void BME280_ReadCalibration(void)
-{
-    uint8_t data[6];
-    HAL_I2C_Mem_Read(&hi2c1, BME280_ADDR, 0x88, 1, data, 6, HAL_MAX_DELAY);
-
-    calib.dig_T1 = (uint16_t)(data[1] << 8 | data[0]);
-    calib.dig_T2 = (int16_t)(data[3] << 8 | data[2]);
-    calib.dig_T3 = (int16_t)(data[5] << 8 | data[4]);
-
-}
-
-
-float BME280_ReadTemperature(void)
-{
-    uint8_t data[3];
-    HAL_I2C_Mem_Read(&hi2c1, BME280_ADDR, 0xFA, 1, data, 3, HAL_MAX_DELAY);
-
-    int32_t raw = ((int32_t)data[0] << 12) | ((int32_t)data[1] << 4) | (data[2] >> 4);
-    return BME280_CompensateTemp(raw);
+    return tempC; // returning temp in celsius because its better
 }
 
 /* USER CODE END PV */
@@ -175,10 +112,9 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  int NTCMode = 0;
+  int NTCMode = 0; //mode 0 is for ntc thermistor and voltage divider, mode 1 is for BME sensor. Both displayed on OLED
 
-  BME280_ReadCalibration();
-  BME280_Init();
+
 
 
 
@@ -220,7 +156,7 @@ int main(void)
       // Map temperature to fan duty
       uint32_t duty = 0;
       if (temp < 20) duty = 0;          // Fan OFF
-      else if (temp < 24) duty = 500;   // 50% duty cycle
+      else if (temp < 24) duty = 500;   // 50% duty cycle, fan on half of the time
       else if (temp < 35) duty = 800;   // 70% duty cycle
       else duty = 1000;                 // 100%
 
@@ -232,12 +168,12 @@ int main(void)
 
   	  }
 	  else {
-	      float temp = BME280_ReadTemperature();  // °C
+	      float temp = BME280_ReadTemperature();  // reaads temperature for BME280 this time
 	      uint32_t duty = 0;
 
 	      // Same fan control logic
 	      if (temp < 20) duty = 0;
-	      else if (temp < 24) duty = 500;
+	      else if (temp < 24) duty = 500; // 50% duty cycle
 	      else if (temp < 35) duty = 800;
 	      else duty = 1000;
 
