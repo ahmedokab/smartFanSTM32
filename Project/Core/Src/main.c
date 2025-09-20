@@ -18,12 +18,18 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
+#include "i2c.h"
+#include "tim.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <math.h>
-
+#include "./BME280/bme280.h"
+#include "ssd1306.h"
 
 
 /* USER CODE END Includes */
@@ -48,13 +54,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc1;
-
-I2C_HandleTypeDef hi2c1;
-
-TIM_HandleTypeDef htim1;
-
-UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
@@ -77,21 +76,55 @@ float read_temperature(void) {
     return tempC; // returning temp in celsius because its better
 }
 
+
+float temperature;
+float humidity;
+float pressure;
+
+struct bme280_dev dev;
+struct bme280_data comp_data;
+int8_t result;
+
+char hum_string[32];
+char temp_string[32];
+char press_string[32];
+char duty_string[32];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_ADC1_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+int8_t user_i2c_read(uint8_t id, uint8_t reg_addr, uint8_t *data, uint16_t len)
+{
+  if(HAL_I2C_Master_Transmit(&hi2c1, (id << 1), &reg_addr, 1, HAL_MAX_DELAY) != HAL_OK) return -1;
+  if(HAL_I2C_Master_Receive(&hi2c1, (id << 1), data, len, HAL_MAX_DELAY) != HAL_OK) return -1;
+  return 0;
+}
+
+// I2C write function for BME280
+int8_t user_i2c_write(uint8_t id, uint8_t reg_addr, uint8_t *data, uint16_t len)
+{
+  uint8_t buf[16];   // using static buffer instead of malloc to avoid memory leaks
+  buf[0] = reg_addr;
+  memcpy(&buf[1], data, len);
+
+  if(HAL_I2C_Master_Transmit(&hi2c1, (id << 1), buf, len + 1, HAL_MAX_DELAY) != HAL_OK) return -1;
+  return 0;
+}
+
+/* Delay function for BME280 driver */
+void user_delay_ms(uint32_t period)
+{
+    HAL_Delay(period);
+}
+
+
 
 /* USER CODE END 0 */
 
@@ -112,8 +145,12 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  int NTCMode = 0; //mode 0 is for ntc thermistor and voltage divider, mode 1 is for BME sensor. Both displayed on OLED
+  int NTCMode = 0; //mode 1 is for ntc thermistor and voltage divider, mode 0 is for BME sensor. Both displayed on OLED
 
+  result = bme280_init(&dev);
+  if (result != BME280_OK) {
+      printf("BME280 init failed: %d\r\n", result);
+  }
 
 
 
@@ -134,8 +171,35 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
+  uint32_t duty = 0;
+
 
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  dev.dev_id = BME280_I2C_ADDR_PRIM;
+  dev.intf = BME280_I2C_INTF;
+  dev.read = user_i2c_read;
+  dev.write = user_i2c_write;
+  dev.delay_ms = user_delay_ms;
+  result = bme280_init(&dev);
+
+  dev.settings.osr_h = BME280_OVERSAMPLING_1X;
+   dev.settings.osr_p = BME280_OVERSAMPLING_16X;
+   dev.settings.osr_t = BME280_OVERSAMPLING_2X;
+   dev.settings.filter = BME280_FILTER_COEFF_16;
+   result = bme280_set_sensor_settings(
+       BME280_OSR_PRESS_SEL | BME280_OSR_TEMP_SEL |
+       BME280_OSR_HUM_SEL | BME280_FILTER_SEL, &dev);
+
+   SSD1306_Init();
+
+   SSD1306_GotoXY(12, 12);
+   SSD1306_Puts("Ahmed's", &Font_11x18, 1);
+   SSD1306_GotoXY(10, 35);
+   SSD1306_Puts("Weather Station", &Font_7x10, 1);
+   SSD1306_UpdateScreen();
+   HAL_Delay(2000);
+   SSD1306_Clear();
+
 
   /* USER CODE END 2 */
 
@@ -163,24 +227,56 @@ int main(void)
       __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
 
       printf("Temp = %.2f °C, Fan Duty = %lu\r\n", temp, duty);
+      sprintf(temp_string, "Temp: %.1f \xB0""C", temp);
+      sprintf(duty_string, "Temp: %.1f \xB0""C", duty);
 
       HAL_Delay(1000); // 1 sec update
 
+      // Draw to OLED
+      SSD1306_Clear();
+      SSD1306_GotoXY(0, 0);
+      SSD1306_Puts(temp_string, &Font_7x10, 1);
+      SSD1306_UpdateScreen();
+    	      SSD1306_GotoXY(0, 20);
+    	      SSD1306_Puts(duty, &Font_7x10, 1);
+
   	  }
 	  else {
-	      float temp = BME280_ReadTemperature();  // reaads temperature for BME280 this time
+	      result = bme280_set_sensor_mode(BME280_FORCED_MODE, &dev);
+	      dev.delay_ms(100);
+	      result = bme280_get_sensor_data(BME280_ALL, &comp_data, &dev);
+
+
+	      // Convert fixed-point to float values
+	      temperature = comp_data.temperature / 100.0f;
+	      humidity    = comp_data.humidity    / 1024.0f;
+	      pressure    = comp_data.pressure    / 10000.0f;
+
+	      printf("BME280 Temp = %.2f °C, Fan Duty = %lu\r\n", temperature, duty);
+	      sprintf(temp_string, "Temp: %.1f \xB0""C", temperature);
+	      sprintf(hum_string,  "Hum:  %.1f %%", humidity);
+	      sprintf(press_string,"Press:%.1f hPa", pressure);
+
+	      // reaads temperature for BME280 this time
 	      uint32_t duty = 0;
 
 	      // Same fan control logic
-	      if (temp < 20) duty = 0;
-	      else if (temp < 24) duty = 500; // 50% duty cycle
-	      else if (temp < 35) duty = 800;
+	      if (temperature < 20) duty = 0;
+	      else if (temperature < 24) duty = 500; // 50% duty cycle
+	      else if (temperature < 35) duty = 800;
 	      else duty = 1000;
 
 	      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, duty);
 
-	      printf("BME280 Temp = %.2f °C, Fan Duty = %lu\r\n", temp, duty);
-
+	      // Draw to OLED
+	      SSD1306_Clear();
+	      SSD1306_GotoXY(0, 0);
+	      SSD1306_Puts(temp_string, &Font_7x10, 1);
+	      SSD1306_GotoXY(0, 20);
+	      SSD1306_Puts(hum_string, &Font_7x10, 1);
+	      SSD1306_GotoXY(0, 40);
+	      SSD1306_Puts(press_string, &Font_7x10, 1);
+	      SSD1306_UpdateScreen();
 	      HAL_Delay(1000); // 1 sec update
 	  }
 
@@ -228,210 +324,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC1_Init(void)
-{
-
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
-
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-  */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
-  sConfig.Channel = ADC_CHANNEL_0;
-  sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 84;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-  HAL_TIM_MspPostInit(&htim1);
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
