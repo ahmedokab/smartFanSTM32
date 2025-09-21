@@ -15,7 +15,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 - **PWM** for fan motor speed control  
 - **ADC** to read a temperature sensor (NTC thermistor)  
 - **UART** to stream telemetry data to a serial terminal  
--  **I²C** with BME280 sensor and **SPI/I²C OLED display** for on-device visualization
+-  **I²C** with BME280 sensor and **I²C OLED display** for on-device visualization
 -  In the end, I switched to the I2C option for greater accuracy, but the  code provides an option for both via an if statement
 
 ---
