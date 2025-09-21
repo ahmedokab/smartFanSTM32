@@ -36,7 +36,7 @@ The project demonstrates integration of multiple STM32 peripherals:
 - MOSFET (FQP30N06L) for fan driver (logic-level N-channel)  
 - DC Fan 12V powered from external adapter or battery  
 - BME280 for digital temp/humidity/pressure over I²C  
-- SSD1306 OLED for real-time display via SPI/I²C  
+- SSD1306 OLED for real-time display via I²C  
 - Breadboard + jumper wires + a bunch of resistors
 - USB cable for STM32 programming and UART telemetry  
 
